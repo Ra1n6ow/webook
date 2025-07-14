@@ -48,3 +48,11 @@ func (s *UserService) Login(ctx context.Context, email, password string) (domain
 	}
 	return u, nil
 }
+
+func (s *UserService) Edit(ctx context.Context, u domain.User) error {
+	return s.repo.Update(ctx, u)
+}
+
+func (s *UserService) Profile(ctx context.Context, userId int64) (domain.User, error) {
+	return s.repo.FindById(ctx, userId)
+}

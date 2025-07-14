@@ -34,7 +34,7 @@ func initUserHandler(server *gin.Engine, db *gorm.DB) {
 }
 
 func initDB() *gorm.DB {
-	db, err := gorm.Open(mysql.Open("root:123456@tcp(localhost:3306)/webook"))
+	db, err := gorm.Open(mysql.Open("root:123456@tcp(localhost:3306)/webook?parseTime=true"))
 	if err != nil {
 		panic(err)
 	}
@@ -51,8 +51,10 @@ func initWebServer() *gin.Engine {
 	server.Use(cors.New(cors.Config{
 		// AllowOrigins:     []string{"http://localhost:3000"},
 		// AllowMethods:     []string{"POST", "GET"},
-		AllowHeaders: []string{"content-type"},
-		// ExposeHeaders:    []string{"Content-Length"},
+		// 允许前端发送给服务器的请求头
+		AllowHeaders: []string{"content-type", "Authorization"},
+		// 允许前端从服务器获取的响应头
+		ExposeHeaders:    []string{"x-jwt-token"},
 		AllowCredentials: true,
 		AllowOriginFunc: func(origin string) bool {
 			if strings.HasPrefix(origin, "http://localhost") {
