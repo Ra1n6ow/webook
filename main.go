@@ -65,9 +65,10 @@ func initWebServer() *gin.Engine {
 		MaxAge: 1 * time.Hour,
 	}))
 
-	// 将 session 存储在 cookie 中
+	// 将 session 存储在 cookie 中， 一般是存储在 redis 中
 	store := cookie.NewStore([]byte("secret12315"))
 	server.Use(sessions.Sessions("ssid", store))
-	server.Use(middleware.NewLoginMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
+	// server.Use(middleware.NewLoginMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
+	server.Use(middleware.NewLoginJWTMiddlewareBuilder().IgnorePaths("/users/login").IgnorePaths("/users/signup").Build())
 	return server
 }

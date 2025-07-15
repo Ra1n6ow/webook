@@ -7,6 +7,7 @@ import (
 	"github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/ra1n6ow/webook/internal/domain"
 	"github.com/ra1n6ow/webook/internal/service"
 )
@@ -43,7 +44,7 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 func (h *UserHandler) RegisterRoutes(server *gin.Engine) {
 	ug := server.Group("/users")
 	ug.POST("/signup", h.SignUp)
-	ug.POST("/login", h.Login)
+	ug.POST("/login", h.LoginJWT)
 	ug.POST("/edit", h.Edit)
 	ug.GET("/profile", h.Profile)
 }
@@ -105,6 +106,47 @@ func (h *UserHandler) SignUp(ctx *gin.Context) {
 	}
 }
 
+func (h *UserHandler) LoginJWT(ctx *gin.Context) {
+	type loginReq struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	var req loginReq
+	if err := ctx.Bind(&req); err != nil {
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+
+	u, err := h.svc.Login(ctx, req.Email, req.Password)
+	switch err {
+	case nil:
+		uc := UserClaims{
+			Uid:              u.Id,
+			UserAgent:        ctx.GetHeader("User-Agent"),
+			RegisteredClaims: jwt.RegisteredClaims{
+				// 1 分钟过期
+				// ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+			},
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, uc)
+		tokenStr, err := token.SignedString([]byte("1234567890"))
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, "系统错误")
+			return
+		}
+		ctx.Header("x-jwt-token", tokenStr)
+		ctx.String(http.StatusOK, "登录成功")
+		return
+	case service.ErrInvalidUserOrPassword:
+		ctx.String(http.StatusOK, "用户名或密码错误")
+		return
+	default:
+		ctx.String(http.StatusOK, "系统错误")
+		return
+	}
+}
+
 func (h *UserHandler) Login(ctx *gin.Context) {
 	type loginReq struct {
 		Email    string `json:"email"`
@@ -154,15 +196,27 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
+	userId, ok := ctx.Get("userId")
+	if !ok {
+		ctx.String(http.StatusOK, "用户未登录")
+		return
+	}
+	userIdInt64, ok := userId.(int64)
+	if !ok {
+		ctx.String(http.StatusOK, "用户ID类型错误")
+		return
+	}
 
+	/* 从 session 中获取 userId
 	session := sessions.Default(ctx)
 	userId, ok := session.Get("userId").(int64)
 	if !ok {
 		ctx.String(http.StatusOK, "用户未登录")
 		return
 	}
+	*/
 
-	_, err := h.svc.Profile(ctx, userId)
+	_, err := h.svc.Profile(ctx, userIdInt64)
 	if err != nil {
 		ctx.String(http.StatusOK, "session 错误, 未找到用户")
 		return
@@ -206,7 +260,7 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 	}
 
 	ud := domain.User{
-		Id:       userId,
+		Id:       userIdInt64,
 		Nickname: req.Nickname,
 		Birthday: birthday,
 		Intro:    req.Intro,
@@ -221,16 +275,35 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *UserHandler) Profile(ctx *gin.Context) {
-	session := sessions.Default(ctx)
-	userId, ok := session.Get("userId").(int64)
+	userId, ok := ctx.Get("userId")
 	if !ok {
 		ctx.String(http.StatusOK, "用户未登录")
 		return
 	}
-	u, err := h.svc.Profile(ctx, userId)
+	userIdInt64, ok := userId.(int64)
+	if !ok {
+		ctx.String(http.StatusOK, "用户ID类型错误")
+		return
+	}
+	/*  从 session 中获取 userId
+	session := sessions.Default(ctx)
+	userId, ok := session.Get("userId").(int64)
+	if !ok {
+		ctx.String(http.StatusOK, "用户未登录 from session")
+		return
+	}
+	*/
+
+	u, err := h.svc.Profile(ctx, userIdInt64)
 	if err != nil {
 		ctx.String(http.StatusOK, "系统错误")
 		return
 	}
 	ctx.JSON(http.StatusOK, u)
+}
+
+type UserClaims struct {
+	jwt.RegisteredClaims
+	Uid       int64
+	UserAgent string
 }
