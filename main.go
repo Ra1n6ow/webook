@@ -8,10 +8,12 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
 	"github.com/ra1n6ow/webook/internal/repository"
+	"github.com/ra1n6ow/webook/internal/repository/cache"
 	"github.com/ra1n6ow/webook/internal/repository/dao"
 	"github.com/ra1n6ow/webook/internal/service"
 	"github.com/ra1n6ow/webook/internal/web"
@@ -20,14 +22,16 @@ import (
 
 func main() {
 	db := initDB()
+	redisClient := initRedis()
 	server := initWebServer()
-	initUserHandler(server, db)
+	initUserHandler(server, db, redisClient)
 	server.Run(":8080")
 }
 
-func initUserHandler(server *gin.Engine, db *gorm.DB) {
-	ud := dao.NewUserDAO(db)
-	repo := repository.NewUserRepository(ud)
+func initUserHandler(server *gin.Engine, db *gorm.DB, cmd redis.Cmdable) {
+	userDAO := dao.NewUserDAO(db)
+	userCache := cache.NewUserCache(cmd, time.Minute*15)
+	repo := repository.NewUserRepository(userDAO, userCache)
 	svc := service.NewUserService(repo)
 	h := web.NewUserHandler(svc)
 	h.RegisterRoutes(server)
@@ -43,6 +47,13 @@ func initDB() *gorm.DB {
 		panic(err)
 	}
 	return db
+}
+
+func initRedis() redis.Cmdable {
+	client := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	return client
 }
 
 func initWebServer() *gin.Engine {

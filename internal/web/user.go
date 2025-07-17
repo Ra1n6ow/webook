@@ -122,11 +122,11 @@ func (h *UserHandler) LoginJWT(ctx *gin.Context) {
 	switch err {
 	case nil:
 		uc := UserClaims{
-			Uid:              u.Id,
-			UserAgent:        ctx.GetHeader("User-Agent"),
+			Uid:       u.Id,
+			UserAgent: ctx.GetHeader("User-Agent"),
 			RegisteredClaims: jwt.RegisteredClaims{
-				// 1 分钟过期
-				// ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+				// 2 小时过期
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 120)),
 			},
 		}
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, uc)
