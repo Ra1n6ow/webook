@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"log"
+	"time"
 
 	"github.com/ra1n6ow/webook/internal/domain"
 	"github.com/ra1n6ow/webook/internal/repository/cache"
@@ -10,16 +12,24 @@ import (
 )
 
 var (
-	ErrDuplicateEmail = dao.ErrDuplicateEmail
-	ErrRecordNotFound = dao.ErrRecordNotFound
+	ErrDuplicateUser = dao.ErrDuplicateEmail
+	ErrUserNotFound  = dao.ErrRecordNotFound
 )
 
-type UserRepository struct {
-	dao   *dao.UserDAO
-	cache *cache.UserCache
+type UserRepositoryer interface {
+	Create(ctx context.Context, u domain.User) error
+	FindByEmail(ctx context.Context, email string) (domain.User, error)
+	Update(ctx context.Context, u domain.User) error
+	FindById(ctx context.Context, userId int64) (domain.User, error)
+	FindByPhone(ctx context.Context, phone string) (domain.User, error)
 }
 
-func NewUserRepository(dao *dao.UserDAO, cache *cache.UserCache) *UserRepository {
+type UserRepository struct {
+	dao   dao.UserDAOer
+	cache cache.UserCacher
+}
+
+func NewUserRepository(dao dao.UserDAOer, cache cache.UserCacher) UserRepositoryer {
 	return &UserRepository{
 		dao:   dao,
 		cache: cache,
@@ -27,11 +37,7 @@ func NewUserRepository(dao *dao.UserDAO, cache *cache.UserCache) *UserRepository
 }
 
 func (r *UserRepository) Create(ctx context.Context, u domain.User) error {
-	ud := dao.User{
-		Email:    u.Email,
-		Password: u.Password,
-	}
-	return r.dao.Insert(ctx, ud)
+	return r.dao.Insert(ctx, r.toEntity(u))
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
@@ -43,14 +49,7 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (domain.
 }
 
 func (r *UserRepository) Update(ctx context.Context, u domain.User) error {
-	ud := dao.User{
-		Id:       u.Id,
-		Nickname: u.Nickname,
-		Birthday: u.Birthday,
-		Intro:    u.Intro,
-	}
-
-	return r.dao.Update(ctx, ud)
+	return r.dao.Update(ctx, r.toEntity(u))
 }
 
 func (r *UserRepository) FindById(ctx context.Context, userId int64) (domain.User, error) {
@@ -73,13 +72,40 @@ func (r *UserRepository) FindById(ctx context.Context, userId int64) (domain.Use
 	return u, nil
 }
 
-func (r *UserRepository) toDomain(u dao.User) domain.User {
+func (repo *UserRepository) FindByPhone(ctx context.Context, phone string) (domain.User, error) {
+	u, err := repo.dao.QueryByPhone(ctx, phone)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return repo.toDomain(u), nil
+}
+
+func (repo *UserRepository) toDomain(u dao.User) domain.User {
 	return domain.User{
 		Id:       u.Id,
-		Email:    u.Email,
+		Email:    u.Email.String,
+		Phone:    u.Phone.String,
 		Password: u.Password,
-		Birthday: u.Birthday,
 		Nickname: u.Nickname,
-		Intro:    u.Intro,
+		Birthday: time.UnixMilli(u.Birthday),
+		AboutMe:  u.AboutMe,
+	}
+}
+
+func (repo *UserRepository) toEntity(u domain.User) dao.User {
+	return dao.User{
+		Id: u.Id,
+		Email: sql.NullString{
+			String: u.Email,
+			Valid:  u.Email != "",
+		},
+		Phone: sql.NullString{
+			String: u.Phone,
+			Valid:  u.Phone != "",
+		},
+		Password: u.Password,
+		Birthday: u.Birthday.UnixMilli(),
+		AboutMe:  u.AboutMe,
+		Nickname: u.Nickname,
 	}
 }

@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -14,11 +15,19 @@ var (
 	ErrRecordNotFound = gorm.ErrRecordNotFound
 )
 
+type UserDAOer interface {
+	Insert(ctx context.Context, u User) error
+	QueryByEmail(ctx context.Context, email string) (User, error)
+	Update(ctx context.Context, u User) error
+	QueryById(ctx context.Context, userId int64) (User, error)
+	QueryByPhone(ctx context.Context, phone string) (User, error)
+}
+
 type UserDAO struct {
 	db *gorm.DB
 }
 
-func NewUserDAO(db *gorm.DB) *UserDAO {
+func NewUserDAO(db *gorm.DB) UserDAOer {
 	return &UserDAO{
 		db: db,
 	}
@@ -55,13 +64,22 @@ func (dao *UserDAO) QueryById(ctx context.Context, userId int64) (User, error) {
 	return u, err
 }
 
+func (dao *UserDAO) QueryByPhone(ctx context.Context, phone string) (User, error) {
+	var u User
+	err := dao.db.WithContext(ctx).Where("phone = ?", phone).First(&u).Error
+	return u, err
+}
+
 type User struct {
-	Id       int64  `gorm:"primaryKey,autoIncrement"`
-	Email    string `gorm:"unique"`
+	Id int64 `gorm:"primaryKey,autoIncrement"`
+	// 代表这是一个可以为 NULL 的列
+	Email    sql.NullString `gorm:"unique"`
 	Password string
-	Birthday time.Time `gorm:"type:datetime;default:'1900-01-01'"`
-	Nickname string    `gorm:"type:varchar(100)"`
-	Intro    string    `gorm:"type:varchar(1024)"`
+	Birthday int64
+	Nickname string `gorm:"type:varchar(100)"`
+	AboutMe  string `gorm:"type=varchar(4096)"`
+	// 代表这是一个可以为 NULL 的列
+	Phone sql.NullString `gorm:"unique"`
 
 	// 时区，UTC 0 的毫秒数
 	// 创建时间

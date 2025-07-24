@@ -10,15 +10,20 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type UserCacher interface {
+	Get(ctx context.Context, id int64) (domain.User, error)
+	Set(ctx context.Context, u domain.User) error
+}
+
 type UserCache struct {
 	cmd    redis.Cmdable
 	expire time.Duration
 }
 
-func NewUserCache(cmd redis.Cmdable, expire time.Duration) *UserCache {
+func NewUserCache(cmd redis.Cmdable) UserCacher {
 	return &UserCache{
 		cmd:    cmd,
-		expire: expire,
+		expire: time.Minute * 15,
 	}
 }
 
